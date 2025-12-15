@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Base Token Inspector (Coinbase Wallet SDK)</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; max-width: 920px; }
+      h1 { margin: 0 0 8px; font-size: 22px; }
+      .muted { opacity: .75; }
+      .card { border: 1px solid rgba(127,127,127,.35); border-radius: 14px; padding: 16px; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+      button { border: 1px solid rgba(127,127,127,.5); border-radius: 12px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
+      button:disabled { opacity: .6; cursor: not-allowed; }
+      input, select { border: 1px solid rgba(127,127,127,.5); border-radius: 12px; padding: 10px 12px; }
+      input { width: 560px; max-width: 100%; }
+      pre { border: 1px solid rgba(127,127,127,.35); border-radius: 14px; padding: 12px; overflow: auto; margin: 12px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      a { color: inherit; }
+      .small { font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>Built for Base: Token Inspector</h1>
+    <div class="muted small">Connect Coinbase Wallet, switch to Base Mainnet (chainId 8453), and read a verified token balance via Basescan-linked contracts.</div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="row">
+        <button id="connectBtn">Connect Coinbase Wallet</button>
+        <button id="switchBtn" disabled>Switch to Base Mainnet</button>
+        <button id="readBtn" disabled>Read Token Balance</button>
+      </div>
+
+      <div class="row">
+        <label class="small muted" for="tokenSel">Token:</label>
+        <select id="tokenSel">
+          <option value="0x4200000000000000000000000000000000000006" data-label="WETH">WETH (0x4200…0006)</option>
+          <option value="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" data-label="USDC">USDC (0x8335…2913)</option>
+        </select>
+        <span class="small muted" id="tokenLinkWrap"></span>
+      </div>
+
+      <div class="row">
+        <label class="small muted" for="addr">Address:</label>
+        <input id="addr" placeholder="0x… (auto-filled after connect)" />
+      </div>
+
+      <pre id="log" aria-live="polite"></pre>
+    </div>
+
+    <script type="module">
+      import CoinbaseWalletSDK from "https://esm.sh/@coinbase/wallet-sdk@4.3.2";
+      import { ethers } from "https://esm.sh/ethers@6.13.4";
+
+      const BASE = {
+        chainIdDec: 8453,
+        chainIdHex: "0x2105",
+        name: "Base",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        rpcUrls: ["https://mainnet.base.org"],
+        blockExplorerUrls: ["https://basescan.org"],
+      };
+
+      const ERC20_ABI = [
+        "function balanceOf(address) view returns (uint256)",
+        "function decimals() view returns (uint8)",
+        "function symbol() view returns (string)",
+      ];
+
+      const connectBtn = document.getElementById("connectBtn");
+      const switchBtn = document.getElementById("switchBtn");
+      const readBtn = document.getElementById("readBtn");
+      const addrInput = document.getElementById("addr");
+      const tokenSel = document.getElementById("tokenSel");
+      const tokenLinkWrap = document.getElementById("tokenLinkWrap");
+      const logEl = document.getElementById("log");
+
+      let providerEip1193 = null;
+
+      function log(line) {
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setBusy(busy) {
+        connectBtn.disabled = busy;
+        switchBtn.disabled = busy || !providerEip1193;
+        readBtn.disabled = busy || !providerEip1193;
+        tokenSel.disabled = busy;
+      }
+
+      function updateTokenLink() {
+        const addr = tokenSel.value;
+        tokenLinkWrap.innerHTML = `Basescan: <a href="https://basescan.org/token/${addr}" target="_blank" rel="noreferrer">https://basescan.org/token/${addr}</a>`;
+      }
+      updateTokenLink();
+      tokenSel.addEventListener("change", updateTokenLink);
+
+      async function ensureBase() {
+        const chainId = await providerEip1193.request({ method: "eth_chainId" });
+        if (String(chainId).toLowerCase() === BASE.chainIdHex) return true;
+
+        try {
+          await providerEip1193.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: BASE.chainIdHex }],
+          });
+          return true;
+        } catch (err) {
+          const code = err?.code ?? err?.data?.originalError?.code;
+          if (code === 4902) {
+            await providerEip1193.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: BASE.chainIdHex,
+                chainName: BASE.name,
+                nativeCurrency: BASE.nativeCurrency,
+                rpcUrls: BASE.rpcUrls,
+                blockExplorerUrls: BASE.blockExplorerUrls,
+              }],
+            });
+            return true;
+          }
+          throw err;
+        }
+      }
+
+      connectBtn.addEventListener("click", async () => {
+        logEl.textContent = "";
+        setBusy(true);
+        try {
+          const sdk = new CoinbaseWalletSDK({
+            appName: "Base Token Inspector",
+            appLogoUrl: "https://base.org/favicon.ico",
+            darkMode: window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false,
+          });
+
+          providerEip1193 = sdk.makeWeb3Provider(BASE.rpcUrls[0], BASE.chainIdDec);
+
+          const accounts = await providerEip1193.request({ method: "eth_requestAccounts" });
+          const address = Array.isArray(accounts) ? accounts[0] : null;
+          if (!address) throw new Error("No account returned by wallet.");
+
+          addrInput.value = address;
+          log(`✅ Connected: ${address}`);
+          log(`ℹ️ Target: ${BASE.name} (chainId ${BASE.chainIdDec})`);
+
+          switchBtn.disabled = false;
+          readBtn.disabled = false;
+          updateTokenLink();
+        } catch (e) {
+          log(`❌ Connect failed: ${e?.message ?? String(e)}`);
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      switchBtn.addEventListener("click", async () => {
+        setBusy(true);
+        try {
+          await ensureBase();
+          const chainId = await providerEip1193.request({ method: "eth_chainId" });
+          log(`✅ Active chainId: ${parseInt(chainId, 16)} (${chainId})`);
+        } catch (e) {
+          log(`❌ Switch failed: ${e?.message ?? String(e)}`);
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      readBtn.addEventListener("click", async () => {
+        setBusy(true);
+        try {
+          const address = (addrInput.value || "").trim();
+          if (!ethers.isAddress(address)) throw new Error("Invalid address.");
+
+          await ensureBase();
+
+          const tokenAddress = tokenSel.value;
+          const browserProvider = new ethers.BrowserProvider(providerEip1193);
+          const token = new ethers.Contract(tokenAddress, ERC20_ABI, browserProvider);
+
+          const [symbol, decimals, raw] = await Promise.all([
+            token.symbol(),
+            token.decimals(),
+            token.balanceOf(address),
+          ]);
+
+          const formatted = ethers.formatUnits(raw, decimals);
+          log(`✅ ${symbol} balance on Base: ${formatted}`);
+          log(`🔎 Address on Basescan: https://basescan.org/address/${address}`);
+          log(`🔎 Token on Basescan: https://basescan.org/token/${tokenAddress}`);
+        } catch (e) {
+          log(`❌ Read failed: ${e?.message ?? String(e)}`);
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      log("Ready. Connect your Coinbase Wallet to read verified Base token balances.");
+    </script>
+  </body>
+</html>
