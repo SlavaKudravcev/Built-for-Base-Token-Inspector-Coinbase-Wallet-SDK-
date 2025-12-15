@@ -83,3 +83,14 @@ GitHub: https://github.com/SlavaKudravcev
 Public contacts:
 - Email: orbital-barges-05@icloud.com
 - X (Twitter): https://x.com/slavakudravceev
+
+## Testnet Deployment (Base Sepolia)
+
+A smart contract has been deployed to the Base Sepolia test network for validation and testing purposes.
+
+Deployed contract address:
+0x57Cf25F5A0Ca49D8C2d98C14c08Ab0CF02BA6040
+
+Basescan deployment and verification links:
+Contract address: https://sepolia.basescan.org/address/0x57Cf25F5A0Ca49D8C2d98C14c08Ab0CF02BA6040
+Contract verification (source code): https://sepolia.basescan.org/address/0x57Cf25F5A0Ca49D8C2d98C14c08Ab0CF02BA6040#code
