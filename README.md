@@ -79,10 +79,7 @@ The UI prints:
 - The script uses the public Base RPC endpoint (https://mainnet.base.org). For production apps, consider using a dedicated RPC provider.
 
 ## Author and contacts
-GitHub: https://github.com/<your-github-handle>
+GitHub: https://github.com/SlavaKudravcev
 Public contacts:
-- Email: <you@example.com>
-- X (Twitter): https://x.com/<your-handle>
-
-## license.md (required third file)
-Create a file named license.md in the repository root and paste the following MIT License text exactly (replace <YEAR> and <NAME>):
+- Email: orbital-barges-05@icloud.com
+- X (Twitter): https://x.com/slavakudravceev
